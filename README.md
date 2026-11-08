@@ -1,5 +1,13 @@
 # scarlett18i8
 
+> [!NOTE]
+> **Archived. For most people, use
+> [Scarlett MixControl Community Edition](https://github.com/MarecekW/scarlett-mixcontrol-1stgen)
+> instead.** It's a full native macOS app (mixer window, presets, menu-bar panel,
+> auto-reconnect) and supports every 1st-gen USB Scarlett, with the 18i8 confirmed
+> on hardware. This script still works as a small, dependency-light command-line
+> alternative, but it won't be developed further.
+
 Control a **1st-generation Focusrite Scarlett 18i8** on modern macOS, where
 Focusrite's *Scarlett MixControl* can no longer see the device.
 
@@ -75,9 +83,10 @@ apply                          re-send all stored settings (e.g. after a power c
 out <1-8> <src>                route a hardware output (1/2 Monitor, 3/4 HP1, 5/6 HP2, 7/8 SPDIF)
 vol <master|1-8> <dB>          output volume, -128..+6 dB ('off' = -inf)
 mute <master|1-8> <on|off>
-matrix <1-18> <src>            choose what feeds mixer input row 1-18 (no mixes)
+matrix <1-18> <src>            choose what feeds mixer input row 1-18 (no mixes; a source
+                               already on another row is moved, not doubled)
 mix <1-18> <A-H> <dB|off>      set gain of matrix row into Mix A-H
-capture <1-18> <src>           choose what the computer receives on input channel 1-18
+capture <1-14> <src>           choose what the computer receives on input channel 1-14
 inst <1|2> <on|off>            instrument (Hi-Z) switch for inputs 1-2
 pad <1-4> <on|off>             -10 dB pad for inputs 1-4
 clock <internal|spdif|adat>
@@ -117,10 +126,14 @@ save                           store current settings in the unit (survives powe
                                          │            │
                  ┌───────────────────────┴────────────┤
                  ▼                                    ▼
-        output routing (8)                  capture routing (18)
+        output routing (8)                  capture routing (14)
         1/2 Monitor 3/4 HP1                 → what the computer records
         5/6 HP2     7/8 SPDIF
 ```
+
+The 18i8 sends 14 channels to the computer (`preset monitor` gives it Analog 1-8,
+SPDIF 1-2 and ADAT 1-4). Don't assign the same source to two matrix rows: the
+firmware feeds it twice (+6 dB). The `matrix` command moves the source instead.
 
 Mixes are mono busses. For a stereo mix, use a pair (A/B, C/D, …), and pan a
 source by setting different gains into the two busses of the pair.
@@ -143,7 +156,9 @@ So:
 
 The USB protocol was reverse-engineered for the Linux kernel's
 `sound/usb/mixer_scarlett.c` by Tobias Hoffmann, Robin Gareus, Chris J. Arges
-and others. This script reimplements it for macOS in user space.
+and others. This script reimplements it for macOS in user space. The 14-channel
+capture count and the double-feed quirk come from
+[MarecekW/scarlett-mixcontrol-1stgen](https://github.com/MarecekW/scarlett-mixcontrol-1stgen).
 
 Not affiliated with or endorsed by Focusrite. "Scarlett" and "MixControl" are
 trademarks of Focusrite Audio Engineering Ltd. Use at your own risk.

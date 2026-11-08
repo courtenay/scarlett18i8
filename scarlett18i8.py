@@ -76,7 +76,8 @@ class Scarlett:
 
 # ----------------------------------------------------------- device model ---
 OUT_PAIRS = ["Monitor", "Headphone 1", "Headphone 2", "SPDIF"]   # outputs 1/2,3/4,5/6,7/8
-N_MATRIX_IN, N_MIX, N_CAPTURE, N_OUT = 18, 8, 18, 8
+# The 18i8 sends 14 channels to the computer (macOS shows 14 inputs).
+N_MATRIX_IN, N_MIX, N_CAPTURE, N_OUT = 18, 8, 14, 8
 
 # Source numbering (raw value). -1 = Off.
 def src_name(v):
@@ -140,8 +141,8 @@ def preset_monitor():
         "outputs": {str(c): {"vol": 0, "mute": 0} for c in range(0, 9)},
         # Monitor/HP1/HP2 L <- Mix A, R <- Mix B; SPDIF off
         "output_route": [26, 27, 26, 27, 26, 27, -1, -1],
-        # capture: analog 1-8, SPDIF 1-2, ADAT 1-8
-        "capture_route": list(range(8, 16)) + [16, 17] + list(range(18, 26)),
+        # capture (14 ch): analog 1-8, SPDIF 1-2, ADAT 1-4
+        "capture_route": list(range(8, 16)) + [16, 17] + list(range(18, 22)),
         # mixer rows: analog 1-8, (off x8), PCM 1-2
         "matrix_route": list(range(8, 16)) + [-1] * 8 + [0, 1],
         "matrix_gain": [[OFF] * 8 for _ in range(18)],
@@ -176,7 +177,7 @@ def need_state():
 def write_state(d, st):
     d.set8(U_CLOCK, 0x0100, st["clock_source"])
     for o, v in enumerate(st["output_route"]): d.set16(U_OUT_MUX, w_out_mux(o), v)
-    for i, v in enumerate(st["capture_route"]): d.set16(U_CAP_MUX, w_cap_mux(i), v)
+    for i, v in enumerate(st["capture_route"][:N_CAPTURE]): d.set16(U_CAP_MUX, w_cap_mux(i), v)
     for i, v in enumerate(st["matrix_route"]): d.set16(U_MATRIX_MUX, w_matrix_mux(i), v)
     for i, row in enumerate(st["matrix_gain"]):
         for m, v in enumerate(row): d.set16(U_MATRIX, w_matrix_gain(i, m), v)
@@ -252,9 +253,10 @@ scarlett18i8.py - control a 1st-gen Scarlett 18i8 without MixControl
   out <1-8> <src>                route a hardware output (1/2 Monitor, 3/4 HP1, 5/6 HP2, 7/8 SPDIF)
   vol <master|1-8> <dB>          output volume, -128..+6 dB ('off' = -inf)
   mute <master|1-8> <on|off>
-  matrix <1-18> <src>            choose what feeds mixer input row 1-18 (no mixes)
+  matrix <1-18> <src>            choose what feeds mixer input row 1-18 (no mixes; a source
+                                 already on another row is moved, not doubled)
   mix <1-18> <A-H> <dB|off>      set gain of matrix row into Mix A-H
-  capture <1-18> <src>           choose what the computer receives on input channel 1-18
+  capture <1-14> <src>           choose what the computer receives on input channel 1-14
   inst <1|2> <on|off>            instrument (Hi-Z) switch for inputs 1-2
   pad <1-4> <on|off>             -10 dB pad for inputs 1-4
   clock <internal|spdif|adat>
@@ -323,6 +325,11 @@ def main(argv):
             d.set16(U_MASTER, w_master_mute(c), v); st["outputs"][str(c)]["mute"] = v
         elif cmd == "matrix":
             i = rng(a[0], 1, 18, "matrix row") - 1; v = parse_src(a[1], allow_mix=False)
+            # The firmware double-feeds a source assigned to two rows (+6 dB), so move it instead.
+            for j, old in enumerate(st["matrix_route"]):
+                if j != i and v >= 0 and old == v:
+                    d.set16(U_MATRIX_MUX, w_matrix_mux(j), -1); st["matrix_route"][j] = -1
+                    print(f"note: {src_name(v)} was on row {j+1}; that row is now Off")
             d.set16(U_MATRIX_MUX, w_matrix_mux(i), v); st["matrix_route"][i] = v
         elif cmd == "mix":
             i = rng(a[0], 1, 18, "matrix row") - 1; m = a[1].upper()
@@ -330,7 +337,7 @@ def main(argv):
             v = parse_db(a[2])
             d.set16(U_MATRIX, w_matrix_gain(i, ord(m) - 65), v); st["matrix_gain"][i][ord(m) - 65] = v
         elif cmd == "capture":
-            i = rng(a[0], 1, 18, "capture channel") - 1; v = parse_src(a[1])
+            i = rng(a[0], 1, N_CAPTURE, "capture channel") - 1; v = parse_src(a[1])
             d.set16(U_CAP_MUX, w_cap_mux(i), v); st["capture_route"][i] = v
         elif cmd == "inst":
             n = rng(a[0], 1, 2, "input"); v = onoff(a[1])
